@@ -1,0 +1,26 @@
+# 03_database_build 配置文件
+# FAISS指纹库构建参数
+
+database_build:
+  # 特征维度
+  esf_dimension: 640
+  cvfh_dimension: 345
+
+  # FAISS索引参数
+  faiss:
+    nlist: 4096        # IVF列表数
+    nprobe: 64        # 搜索时探查的列表数
+    metric: "L2"      # 距离度量: L2 或 IP(内积)
+
+  # 训练参数
+  train:
+    sample_ratio: 0.1  # 训练采样比例（从所有向量中采样训练）
+
+  # 数据路径
+  paths:
+    esf_input: "data/esf_features/train"
+    cvfh_input: "data/cvfh_features/train"
+    esf_output: "data/fingerprints/esf_index.bin"
+    cvfh_output: "data/fingerprints/cvfh_index.bin"
+    esf_ids_output: "data/fingerprints/esf_ids.txt"
+    cvfh_ids_output: "data/fingerprints/cvfh_ids.txt"

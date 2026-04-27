@@ -1,0 +1,9 @@
+x64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.suo
+*.user
+.vs/
+*.pcd

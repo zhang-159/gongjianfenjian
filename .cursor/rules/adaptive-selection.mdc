@@ -1,0 +1,274 @@
+---
+description: 自适应特征库选择策略v5.0算法规范
+alwaysApply: true
+---
+
+# 自适应特征库选择策略v5.0规范
+
+## 1. 算法概述
+
+本系统采用双特征库（ESF + OUR-CVFH）并行检索，通过多指标评估、动态阈值和动态权重实现自适应特征库选择。
+
+## 2. 核心指标计算
+
+### 2.1 难度评估
+
+```cpp
+// difficulty_estimator.h
+#pragma once
+
+#include <vector>
+
+// 估计检索难度
+// @param scores Top-K 置信度列表 [S1, S2, ..., SK]
+// @param K Top-K数量
+// @return difficulty ∈ [0, +∞)，越大越困难
+float estimateDifficulty(const std::vector<float>& scores, int K = 5);
+
+// 内部计算公式：
+// 集中度 = S₁ / mean(S₁:S_K)
+// 离散度 = std(scores) / mean(scores)
+// difficulty = 1.0 / (集中度 + 0.1) * (离散度 + 0.1)
+```
+
+### 2.2 四个评估指标
+
+| 指标 | 计算公式 | 含义 | 权重倾向 |
+|------|----------|------|----------|
+| 得分比值 R | R = S₁ / S₂ | Top-1与Top-2的比值 | 简单样本更信任 |
+| 绝对差值 D | D = S₁ - S₂ | Top-1与Top-2的差值 | 困难样本更看重 |
+| 集中度 G | G = S₁ / mean(S₁:S_K) | Top-K结果的集中程度 | 困难样本更看重 |
+| 类别分散度 N | Top-K中不同类别数 | 结果的多样性 | 越少越确定 |
+
+```cpp
+// 计算四个指标
+// @param scores Top-K置信度列表
+// @return (R, D, G, N)
+std::tuple<float, float, float, int> computeIndicators(const std::vector<float>& scores);
+```
+
+## 3. 动态阈值计算
+
+```cpp
+// dynamic_threshold.h
+#pragma once
+
+#include <utility>
+
+// 根据难度动态计算阈值
+// @param difficulty 难度值（来自estimateDifficulty）
+// @param base_high 高置信度阈值基准（默认1.5）
+// @param base_low 低置信度阈值基准（默认1.1）
+// @return (tau_high, tau_low)
+// @note 困难样本 → 阈值范围扩大（更保守）
+//       简单样本 → 阈值范围缩小（更激进）
+std::pair<float, float> computeDynamicThresholds(
+    float difficulty,
+    float base_high = 1.5f,
+    float base_low = 1.1f);
+
+// 计算公式：
+// factor = 1.0 + log(1.0 + difficulty)
+// tau_high = base_high * factor
+// tau_low = base_low * factor
+```
+
+## 4. 动态权重计算
+
+```cpp
+// dynamic_weight.h
+#pragma once
+
+#include <tuple>
+
+// 根据难度动态调整权重
+// @param difficulty 难度值
+// @return (w_R, w_D, w_G)
+// @note 简单样本：更信任比值R
+//       困难样本：更看重差值D和集中度G
+std::tuple<float, float, float> computeDynamicWeights(float difficulty);
+
+// 计算公式：
+// total = 1.0 + difficulty
+// w_R = 1.0 / total           // 比值权重：简单样本高
+// w_D = difficulty / total   // 差值权重：困难样本高
+// w_G = difficulty / total   // 集中度权重：困难样本高
+// 归一化后返回
+```
+
+## 5. 综合评分
+
+```cpp
+// feature_comparator.h
+#pragma once
+
+#include "difficulty_estimator.h"
+#include "dynamic_threshold.h"
+#include "dynamic_weight.h"
+
+// 计算综合评分
+// @param scores Top-K置信度列表
+// @param difficulty 难度值
+// @param tau_high 高置信度阈值
+// @param tau_low 低置信度阈值
+// @return Q 综合评分
+float computeComprehensiveScore(
+    const std::vector<float>& scores,
+    float difficulty,
+    float tau_high,
+    float tau_low);
+
+// 综合评分公式：
+// R = scores[0] / scores[1]
+// D = scores[0] - scores[1]
+// G = scores[0] / mean(scores)
+// (w_R, w_D, w_G) = computeDynamicWeights(difficulty)
+// Q = w_R * R + w_D * D + w_G * G
+```
+
+## 6. 决策逻辑
+
+```cpp
+// adaptive_selector.h
+#pragma once
+
+#include <string>
+
+// 自适应特征库选择器
+class AdaptiveSelector {
+public:
+    // 默认阈值参数
+    static constexpr float kTauDifficultyMax = 3.0f;  // 难度上限阈值
+    static constexpr float kTauQ = 1.2f;             // 综合评分阈值
+
+    // 选择策略
+    enum class Strategy {
+        UseESF,       // 使用ESF特征库
+        UseCVFH,      // 使用OUR-CVFH特征库
+        UseFusion,    // 双库融合
+        Unknown       // 未知
+    };
+
+    // 执行自适应选择
+    // @param esf_scores ESF检索的Top-K得分
+    // @param cvfh_scores CVFH检索的Top-K得分（可选）
+    // @param K Top-K数量
+    // @return 选择的策略
+    Strategy select(const std::vector<float>& esf_scores,
+                    const std::vector<float>& cvfh_scores = {},
+                    int K = 5);
+
+private:
+    float estimateDifficulty(const std::vector<float>& scores, int K);
+    std::pair<float, float> computeThresholds(float difficulty);
+    std::tuple<float, float, float> computeWeights(float difficulty);
+    float computeScore(const std::vector<float>& scores, float difficulty);
+};
+```
+
+## 7. 完整决策流程
+
+```
+输入点云 P
+    ↓
+提取ESF特征 → ESF库检索 Top-K
+    ↓
+┌──────────────────────────────────────┐
+│ 难度评估: difficulty = estimateDifficulty()
+│ 动态阈值: (τ_high, τ_low) = computeDynamicThresholds(difficulty)
+│ 综合评分: Q = computeComprehensiveScore()
+└──────────────────────────────────────┘
+    ↓
+决策分支:
+    ↓
+    ├── difficulty > 3.0?
+    │      是 → 切换OUR-CVFH → 输出类别ID
+    │
+    ├── Q > 1.2 且 R > τ_high?
+    │      是 → 信任ESF Top-1 → 输出类别ID
+    │
+    ├── R < τ_low?
+    │      是 → 提取OUR-CVFH特征 → CVFH库检索 → 输出类别ID
+    │
+    └── 否则 → 双库融合 → 输出融合结果
+```
+
+## 8. 双库融合
+
+```cpp
+// dual_fusion.h
+#pragma once
+
+#include <vector>
+#include "types.h"
+
+// 双库融合结果
+struct FusionResult {
+    int category_id;         // 最终类别ID
+    float fusion_score;      // 融合得分
+    float esf_score;         // ESF得分
+    float cvfh_score;        // CVFH得分
+};
+
+// 双库融合算法
+// @param esf_candidates ESF检索结果
+// @param cvfh_candidates CVFH检索结果
+// @param esf_weight ESF权重（默认0.4）
+// @param cvfh_weight CVFH权重（默认0.6）
+// @return 融合结果
+FusionResult fuseResults(const std::vector<SearchResult>& esf_candidates,
+                         const std::vector<SearchResult>& cvfh_candidates,
+                         float esf_weight = 0.4f,
+                         float cvfh_weight = 0.6f);
+
+// 融合公式：
+// candidate.final_score = α * candidate.esf_score + β * candidate.cvfh_score
+// 其中 α = 0.4, β = 0.6
+// 返回得分最高的类别
+```
+
+## 9. 默认阈值参数
+
+| 参数 | 默认值 | 说明 | 调整建议 |
+|------|--------|------|----------|
+| τ_high | 1.5 | 高置信度阈值基准 | 调低：更信任ESF；调高：更保守 |
+| τ_low | 1.1 | 低置信度阈值基准 | 调低：减少切换；调高：更多切换到CVFH |
+| τ_difficulty_max | 3.0 | 难度上限阈值 | 调低：更早放弃ESF；调高：更晚放弃ESF |
+| τ_Q | 1.2 | 综合评分阈值 | 影响融合决策 |
+| K | 5 | Top-K 检索数量 | 影响难度评估的准确性 |
+
+## 10. 代码示例
+
+```cpp
+// 使用示例
+#include "adaptive_selector.h"
+
+RecognitionResult recognize(const PointCloudXYZPtr& cloud) {
+    AdaptiveSelector selector;
+    
+    // 1. ESF特征提取和检索
+    auto esf_feature = esf_estimator_.extract(cloud);
+    auto esf_results = esf_index_.search(esf_feature.data(), 5);
+    std::vector<float> esf_scores;
+    for (const auto& r : esf_results) {
+        esf_scores.push_back(r.distance);
+    }
+    
+    // 2. 自适应选��
+    auto strategy = selector.select(esf_scores);
+    
+    // 3. 根据策略执行
+    switch (strategy) {
+        case AdaptiveSelector::Strategy::UseESF:
+            return RecognitionResult{esf_results[0].id, esf_scores[0], ...};
+        case AdaptiveSelector::Strategy::UseCVFH:
+            // 提取CVFH特征并检索
+            auto cvfh_feature = cvfh_estimator_.extract(cloud, normals);
+            auto cvfh_results = cvfh_index_.search(cvfh_feature.data(), 1);
+            return RecognitionResult{cvfh_results[0].id, ...};
+        case AdaptiveSelector::Strategy::UseFusion:
+            // 双库融合
+            return fuseAndRecognize(cloud, esf_results, cvfh_results);
+    }
+}
+```

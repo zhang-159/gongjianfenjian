@@ -1,0 +1,28 @@
+# 04类别判定模块配置文件
+# 版本：v1.0
+
+recognition:
+  # 置信度阈值
+  # Top-1/Top-2 比值 > 此值时，信任ESF识别结果
+  confidence_threshold: 1.5
+
+  # 检索参数
+  top_k: 5
+
+# 特征库路径（相对于项目根目录）
+feature_library:
+  # ESF特征库
+  esf:
+    index_path: "../data/fingerprints/esf_index.bin"
+    ids_path: "../data/fingerprints/esf_ids.txt"
+
+  # CVFH特征库（预留，后续扩展）
+  cvfh:
+    index_path: "../data/fingerprints/cvfh_index.bin"
+    ids_path: "../data/fingerprints/cvfh_ids.txt"
+
+# 点云预处理参数
+preprocessing:
+  voxel_leaf_size: 0.005    # 体素降采样叶子大小（米）
+  mean_k: 50                 # 统计离群点移除的邻居数
+  std_dev_mul: 1.0          # 标准差倍数

@@ -1,0 +1,407 @@
+---
+description: PCL点云处理和FAISS检索开发规范
+alwaysApply: true
+---
+
+# PCL点云处理开发规范
+
+## 1. 开发环境
+
+| 组件 | 版本 | 说明 |
+|------|------|------|
+| 编译器 | MSVC VS2022 | C++17标准 |
+| PCL | 1.14.0 | 点云处理库 |
+| Eigen | 3.4+ | 线性代数 |
+| FAISS | 最新 | 向量检索库 |
+| CMake | 3.20+ | 构建系统 |
+
+## 2. PCL类型别名
+
+在公共头文件中定义常用类型别名：
+
+```cpp
+// types.h
+#pragma once
+
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+
+// 常用点云类型
+using PointXYZ = pcl::PointXYZ;
+using PointXYZRGBA = pcl::PointXYZRGBA;
+using PointCloudXYZ = pcl::PointCloud<pcl::PointXYZ>;
+using PointCloudXYZPtr = pcl::PointCloud<pcl::PointXYZ>::Ptr;
+
+// ESF特征类型
+using ESFFeature = pcl::ESFSignature640;
+using ESFFeatureCloud = pcl::PointCloud<ESFFeature>;
+using ESFFeatureCloudPtr = pcl::PointCloud<ESFFeature>::Ptr;
+
+// OUR-CVFH特征类型
+using CVFHFeature = pcl::VFHSignature308;
+using CVFHFeatureCloud = pcl::PointCloud<CVFHFeature>;
+using CVFHFeatureCloudPtr = pcl::PointCloud<CVFHFeature>::Ptr;
+
+// FPFH特征类型
+using FPFHFeature = pcl::FPFHSignature33;
+using FPFHFeatureCloud = pcl::PointCloud<FPFHFeature>;
+using FPFHFeatureCloudPtr = pcl::PointCloud<FPFHFeature>::Ptr;
+```
+
+## 3. 点云输入规格
+
+| 项目 | 要求 |
+|------|------|
+| 点数范围 | 1024 - 8192（建议2048） |
+| 坐标系 | 世界坐标系 |
+| 单位 | 米（m） |
+| 包含法线 | 否（预处理后） |
+| 包含颜色 | 否（单通道） |
+
+## 4. 特征提取规范
+
+### 4.1 ESF特征提取（640维）
+
+```cpp
+// esf_estimator.h
+#pragma once
+
+#include <pcl/features/esf.h>
+#include "types.h"
+
+namespace esf_database {
+namespace features {
+
+class ESFEstimator {
+public:
+    // 提取ESF特征
+    // @param input_cloud 输入点云（点数1024-8192）
+    // @return 640维ESF特征向量
+    std::vector<float> extract(const PointCloudXYZPtr& input_cloud);
+
+private:
+    pcl::ESFEstimation<pcl::PointXYZ, pcl::ESFSignature640> esf_estimator_;
+};
+
+}}
+```
+
+### 4.2 OUR-CVFH特征提取（345维）
+
+```cpp
+// cvfh_estimator.h
+#pragma once
+
+#include <pcl/features/our_cvfh.h>
+#include "types.h"
+
+namespace esf_database {
+namespace features {
+
+class CVFHEstimator {
+public:
+    // 提取OUR-CVFH特征
+    // @param input_cloud 输入点云
+    // @param normals 法线估计（必须先计算）
+    // @return 345维OUR-CVFH特征向量
+    std::vector<float> extract(const PointCloudXYZPtr& input_cloud,
+                              const NormalCloudPtr& normals);
+
+private:
+    pcl::OURCVFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::VFHSignature308> cvfh_estimator_;
+};
+
+}}
+```
+
+### 4.3 FPFH特征提取（33维）
+
+```cpp
+// fpfh_estimator.h
+#pragma once
+
+#include <pcl/features/fpfh.h>
+#include <pcl/features/normal_3d.h>
+#include "types.h"
+
+namespace esf_database {
+namespace registration {
+
+class FPFHEstimator {
+public:
+    // 估计法线并提取FPFH特征
+    // @param input_cloud 输入点云
+    // @param radius 搜索半径（默认0.05m）
+    // @return 33维FPFH特征向量
+    std::vector<float> extract(const PointCloudXYZPtr& input_cloud, 
+                              float radius = 0.05f);
+
+private:
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normal_estimator_;
+    pcl::FPFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::FPFHSignature33> fpfh_estimator_;
+};
+
+}}
+```
+
+## 5. 点云预处理流程
+
+```
+输入点云 → VoxelGrid降采样 → StatisticalOutlierRemoval → PassThroughFilter → 中心化 → 输出
+```
+
+### 5.1 预处理代码示例
+
+```cpp
+// cloud_preprocessor.h
+#pragma once
+
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/common/transforms.h>
+
+class CloudPreprocessor {
+public:
+    struct Config {
+        float voxel_leaf_size = 0.005f;    // 体素大小（米）
+        int mean_k = 50;                     // 统计分析邻居数
+        float std_dev_mul = 1.0;            // 标准差倍数
+        Eigen::Vector4f z_limits = {-1.0f, 0.5f};  // Z轴范围
+    };
+
+    // 预处理点云
+    // @param input 输入点云
+    // @param config 配置参数
+    // @return 预处理后的点云
+    PointCloudXYZPtr preprocess(const PointCloudXYZPtr& input, 
+                                const Config& config = Config{});
+
+private:
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_filter_;
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> outlier_filter_;
+    pcl::PassThrough<pcl::PointXYZ> pass_filter_;
+};
+```
+
+## 6. 点云变换规范
+
+### 6.1 外参变换矩阵
+
+```cpp
+// extrinsic_transform.h
+#pragma once
+
+#include <Eigen/Dense>
+#include <pcl/point_cloud.h>
+
+// 创建外参变换矩阵
+// @param rx, ry, rz 旋转角度（弧度制）
+// @param tx, ty, tz 平移向量
+// @return 4x4变换矩阵
+Eigen::Matrix4f createExtrinsicMatrix(float rx, float ry, float rz,
+                                       float tx = 0, float ty = 0, float tz = 0);
+
+// 应用变换到点云
+template<typename PointT>
+pcl::PointCloud<PointT>::Ptr transformCloud(
+    const pcl::PointCloud<PointT>::Ptr& cloud,
+    const Eigen::Matrix4f& transform);
+```
+
+### 6.2 姿态采样策略
+
+每个工件生成500个姿态：
+- X轴俯仰角：每15°一个（-90°到+90°）
+- Y轴翻滚角：每15°一个（-90°到+90°）
+- Z轴方位角：每10°一个（0°到360°）
+
+## 7. 配准流程规范
+
+### 7.1 配准Pipeline
+
+```
+FPFH特征提取 → SAC-IA粗配准 → ICP精配准 → 位姿输出
+```
+
+### 7.2 SAC-IA粗配准
+
+```cpp
+// sac_ia_registration.h
+#pragma once
+
+#include <pcl/registration/sample_consensus_prerejective.h>
+#include <pcl/features/fpfh.h>
+#include "types.h"
+
+class SACIARegistration {
+public:
+    struct Config {
+        int max_iterations = 500;
+        int sample_size = 4;
+        float max_correspondence_distance = 0.05f;
+        float transformation_epsilon = 1e-6f;
+    };
+
+    // 执行SAC-IA粗配准
+    // @param source 源点云（场景）
+    // @param target 目标点云（模板）
+    // @param config 配置参数
+    // @return 变换矩阵
+    Eigen::Matrix4f register(const PointCloudXYZPtr& source,
+                            const PointCloudXYZPtr& target,
+                            const Config& config = Config{});
+};
+```
+
+### 7.3 ICP精配准
+
+```cpp
+// icp_registration.h
+#pragma once
+
+#include <pcl/registration/icp.h>
+#include "types.h"
+
+class ICPRegistration {
+public:
+    struct Config {
+        int max_iterations = 50;
+        float max_correspondence_distance = 0.02f;
+        float transformation_epsilon = 1e-8f;
+        float euclidean_fitness_epsilon = 1e-6f;
+    };
+
+    // 执行ICP精配准
+    // @param source 源点云（场景）
+    // @param target 目标点云（模板）
+    // @param initial_transform 初始变换（来自SAC-IA）
+    // @return 配准结果
+    struct Result {
+        Eigen::Matrix4f transform;
+        float fitness_score;    // 适配度分数（越高越好）
+        int iterations;         // 迭代次数
+    };
+    
+    Result register(const PointCloudXYZPtr& source,
+                   const PointCloudXYZPtr& target,
+                   const Eigen::Matrix4f& initial_transform,
+                   const Config& config = Config{});
+};
+```
+
+## 8. FAISS索引规范
+
+### 8.1 索引构建
+
+```cpp
+// faiss_index.h
+#pragma once
+
+#include <faiss/Index.h>
+#include <faiss/IndexIVFFlat.h>
+#include <vector>
+
+class FaissIndex {
+public:
+    // 构建IVFFlat索引
+    // @param dimension 特征维度
+    // @param nlist IVF列表数
+    static std::unique_ptr<faiss::Index> buildIVF(size_t dimension, size_t nlist = 4096);
+
+    // 保存索引到文件
+    static void saveIndex(const faiss::Index& index, const std::string& path);
+
+    // 加载索引
+    static std::unique_ptr<faiss::Index> loadIndex(const std::string& path);
+};
+```
+
+### 8.2 索引规格
+
+| 特征库 | 维度 | 向量数 | 推荐索引 | 参数 |
+|--------|------|--------|----------|------|
+| ESF | 640 | 2,000,000 | IndexIVFFlat | nlist=4096 |
+| OUR-CVFH | 345 | 2,000,000 | IndexIVFFlat | nlist=4096 |
+
+### 8.3 检索接口
+
+```cpp
+// 结果结构
+struct SearchResult {
+    int64_t id;           // 向量ID
+    float distance;        // 距离/相似度
+};
+
+// 执行Top-K检索
+// @param index FAISS索引
+// @param query 查询向量
+// @param k 返回数量
+// @return Top-K结果
+std::vector<SearchResult> search(const faiss::Index& index,
+                                 const float* query,
+                                 size_t k);
+```
+
+## 9. 数据结构规范
+
+### 9.1 识别结果
+
+```cpp
+// 识别结果
+struct RecognitionResult {
+    int category_id;              // 类别ID
+    float confidence;             // 置信度
+    Eigen::Matrix4f pose;         // 6DoF位姿
+    float position_error;         // 位置误差(mm)
+    float rotation_error;         // 旋转误差(度)
+    std::string timestamp;        // 时间戳
+    std::string feature_used;     // 使用的特征库: "ESF" / "OUR-CVFH" / "FUSED"
+};
+
+// 类别判定结果（04输出）
+struct CategoryResult {
+    int category_id;
+    float confidence;
+    std::string feature_library;  // "ESF" / "CVFH" / "FUSED"
+};
+
+// 配准结果（05输出）
+struct PoseResult {
+    Eigen::Matrix4f transform;
+    float fitness_score;
+    int iterations;
+};
+```
+
+## 10. 配置管理规范
+
+使用YAML配置文件管理参数：
+
+```yaml
+# recognition_config.yaml
+recognition:
+  adaptive:
+    difficulty_threshold: 3.0      # 难度阈值
+    score_threshold_high: 1.5     # 高置信度阈值
+    score_threshold_low: 1.1      # 低置信度阈值
+    top_k: 5                     # Top-K检索数
+
+  fusion:
+    esf_weight: 0.4
+    cvfh_weight: 0.6
+
+# registration_config.yaml
+registration:
+  fpfh:
+    radius: 0.05
+
+  sac_ia:
+    max_iterations: 500
+    sample_size: 4
+    max_correspondence_distance: 0.05
+
+  icp:
+    max_iterations: 50
+    max_correspondence_distance: 0.02
+```

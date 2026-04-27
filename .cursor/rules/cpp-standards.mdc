@@ -1,0 +1,158 @@
+---
+description: C++核心标准和PCL命名规范
+alwaysApply: true
+---
+
+# C++开发标准规范
+
+## 1. C++语言标准
+
+**必须使用C++17标准**，不要使用C++20。
+
+```cpp
+// 启用C++17标准 (在CMakeLists.txt或项目设置中)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+```
+
+**为什么用C++17而不是C++20**：
+- PCL 1.14.0 官方主要测试 C++17 兼容性
+- VS2022 的 C++20 部分特性（如 Ranges、Concepts）实现不完整
+- C++17 已包含足够的现代特性：结构化绑定、std::optional、if constexpr、string_view
+- C++17 编译速度更快，生成的代码更稳定
+
+## 2. 命名规范
+
+| 类型 | 命名规则 | 示例 |
+|------|----------|------|
+| 类名 | PascalCase | `PointCloudProcessor`, `FPFHEstimator` |
+| 函数名 | PascalCase | `processPointCloud()`, `estimatePose()` |
+| 变量名 | camelCase | `inputCloud`, `maxIterations` |
+| 成员变量 | camelCase加下划线后缀 | `pointCloud_`, `configMap_` |
+| 常量 | kPascalCase或全大写 | `kMaxIterations`, `MAX_BUFFER_SIZE` |
+| 命名空间 | 全小写下划线分隔 | `pcl::io`, `esf_database::features` |
+| 文件名 | snake_case | `cloud_processor.cpp`, `fpfh_estimator.h` |
+
+## 3. 类型定义
+
+使用 `using` 而非 `typedef`：
+
+```cpp
+// ✅ 推荐
+using PointCloudPtr = pcl::PointCloud<PointT>::Ptr;
+using FeatureVector = std::vector<float>;
+
+// ❌ 避免
+typedef pcl::PointCloud<PointT>::Ptr PointCloudPtr;
+```
+
+## 4. 智能指针
+
+优先使用智能指针管理内存：
+
+```cpp
+// ✅ 推荐
+auto fpfhEstimator = std::make_unique<FPFHEstimator>();
+auto pointCloud = std::make_shared<pcl::PointCloud<PointT>>();
+
+// ❌ 避免裸指针
+FPFHEstimator* estimator = new FPFHEstimator();
+```
+
+## 5. STL容器使用
+
+优先使用标准容器和算法：
+
+```cpp
+// 使用std::vector替代动态数组
+std::vector<float> features(640);
+
+// 使用emplace代替push_back
+result.emplace_back(category_id, confidence);
+
+// 使用范围for
+for (const auto& item : results) {
+    process(item);
+}
+```
+
+## 6. 错误处理
+
+使用异常处理或返回错误码：
+
+```cpp
+// 异常处理
+class RecognitionException : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+// 使用std::optional返回可能失败的结果
+std::optional<PoseResult> estimatePose(const PointCloud& cloud);
+
+// 使用std::expected (C++23) 或 std::pair
+std::pair<bool, PoseResult> estimatePose(const PointCloud& cloud);
+```
+
+## 7. 现代C++特性
+
+充分利用现代C++特性：
+
+```cpp
+// 结构化绑定
+auto [success, result] = processData();
+
+// std::optional
+std::optional<Result> findResult(int id);
+
+// 范围库算法
+std::ranges::sort(results, {}, &Result::score);
+
+// constexpr if (C++17)
+template<typename T>
+auto process(const T& value) {
+    if constexpr (std::is_integral_v<T>) {
+        return value * 2;
+    } else {
+        return value * 2.0;
+    }
+}
+```
+
+## 8. 头文件规范
+
+每个头文件使用包含保护符：
+
+```cpp
+#ifndef PROJECT_MODULE_CLASS_NAME_H
+#define PROJECT_MODULE_CLASS_NAME_H
+
+// 内容
+
+#endif // PROJECT_MODULE_CLASS_NAME_H
+```
+
+使用 `#pragma once` 也可接受。
+
+## 9. 注释规范
+
+使用中文注释，保持简洁：
+
+```cpp
+// 计算变换矩阵，模拟相机视角
+Eigen::Matrix4f createCameraTransform(float rx, float ry, float rz);
+
+// 参数说明
+// @param angle_x X轴旋转角度（弧度制）
+// @return 4x4变换矩阵
+```
+
+## 10. 模块划分
+
+每个类的声明和实现分离：
+
+```
+src/module_name/
+├── class_name.h      // 声明
+└── class_name.cpp    // 实现
+```
