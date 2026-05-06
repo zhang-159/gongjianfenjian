@@ -108,6 +108,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <IncludePath>D:\vsxiangmu\gongjianfenjian;D:\vsxiangmu\gongjianfenjian\04_category_recognition\include;D:\vsxiangmu\gongjianfenjian\02_feature_extraction\src;D:\vsxiangmu\gongjianfenjian\02_feature_extraction\include;D:\vsxiangmu\gongjianfenjian\01_sim_data_gen\src;D:\vsxiangmu\gongjianfenjian\01_sim_data_gen\include;D:\vsxiangmu\gongjianfenjian\libs;D:\vcpk\vcpkg\installed\x64-windows\include;C:\Program Files\PCL 1.14.0\include\pcl-1.14;C:\Program Files\PCL 1.14.0\3rdParty\Boost\include\boost-1_84;C:\Program Files\PCL 1.14.0\3rdParty\Eigen3\include\eigen3;C:\Program Files\PCL 1.14.0\3rdParty\FLANN\include;C:\Program Files\OpenNI2\Include;C:\Program Files\PCL 1.14.0\3rdParty\Qhull\include;C:\Program Files\PCL 1.14.0\3rdParty\VTK\include\vtk-9.3;$(IncludePath)</IncludePath>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
