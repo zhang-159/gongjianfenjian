@@ -6,6 +6,8 @@
 #include "esf_estimator.h"
 #include <stdexcept>
 #include <pcl/common/transforms.h>
+#include <pcl/filters/random_sample.h>
+#include <chrono>
 
 namespace feature_extraction {
 
@@ -38,10 +40,19 @@ FeatureVector ESFEstimator::extract(const PointCloudXYZPtr& input_cloud) {
 
     // 创建特征点云
     ESFFeatureCloudPtr features(new ESFFeatureCloud);
-    
-    // 设置输入点云
+
+    // 按配置采样点数随机降采样，避免 ESF 对大点云过拟合
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(
         const_cast<pcl::PointCloud<pcl::PointXYZ>::Ptr&>(input_cloud));
+    if (cloud->size() > static_cast<size_t>(config_.sample_points)) {
+        pcl::RandomSample<pcl::PointXYZ> sample;
+        sample.setInputCloud(cloud);
+        sample.setSample(static_cast<unsigned int>(config_.sample_points));
+        sample.setSeed(static_cast<unsigned int>(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+        cloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        sample.filter(*cloud);
+    }
 
     // 执行ESF特征提取
     esf_estimator_.setInputCloud(cloud);
@@ -55,7 +66,7 @@ FeatureVector ESFEstimator::extract(const PointCloudXYZPtr& input_cloud) {
     // 转换为FeatureVector格式
     FeatureVector result;
     const auto& signature = features->points[0];
-    
+
     // ESFSignature640 有640个描述子
     // 分别在 histogram[0-9], histogram[10-127], histogram[128-635] 三个区域
     for (int i = 0; i < 640; ++i) {
@@ -84,6 +95,15 @@ void ESFEstimator::extract(const PointCloudXYZPtr& input_cloud,
     // 设置输入并计算
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(
         const_cast<pcl::PointCloud<pcl::PointXYZ>::Ptr&>(input_cloud));
+    if (cloud->size() > static_cast<size_t>(config_.sample_points)) {
+        pcl::RandomSample<pcl::PointXYZ> sample;
+        sample.setInputCloud(cloud);
+        sample.setSample(static_cast<unsigned int>(config_.sample_points));
+        sample.setSeed(static_cast<unsigned int>(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+        cloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        sample.filter(*cloud);
+    }
 
     esf_estimator_.setInputCloud(cloud);
     esf_estimator_.compute(*feature_cloud);

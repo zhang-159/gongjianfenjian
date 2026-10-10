@@ -14,6 +14,7 @@ CVFHEstimator::CVFHEstimator() {
 
     // 配置OUR-CVFH估计器
     cvfh_estimator_.setRadiusNormals(config_.normal_radius);  // 法线搜索半径
+    cvfh_estimator_.setRadiusSearch(config_.cvfh_radius);     // CVFH搜索半径
     cvfh_estimator_.setEPSAngleThreshold(0.13f);  // 约7.5度
     cvfh_estimator_.setCurvatureThreshold(1.0f);
     cvfh_estimator_.setNormalizeBins(false);
@@ -29,6 +30,7 @@ void CVFHEstimator::setConfig(const CVFHConfig& config) {
 
     // 更新CVFH估计器参数
     cvfh_estimator_.setRadiusNormals(config_.normal_radius);
+    cvfh_estimator_.setRadiusSearch(config_.cvfh_radius);
     cvfh_estimator_.setAxisRatio(config_.axis_ratio);
     cvfh_estimator_.setMinPoints(config_.min_points);
 }

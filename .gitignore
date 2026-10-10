@@ -7,3 +7,17 @@ Release/
 *.user
 .vs/
 *.pcd
+*.exe
+*.dll
+*.lib
+*.ilk
+*.idb
+*.log
+
+# 运行时数据（可重新生成）
+data/features/
+data/fingerprints/
+data/logs/
+*.esf
+*.pcd
+*.bin
