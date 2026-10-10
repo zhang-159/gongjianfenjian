@@ -15,9 +15,13 @@ Release/
 *.log
 
 # 运行时数据（可重新生成）
-data/features/
-data/fingerprints/
-data/logs/
+**/data/pointclouds/
+**/data/features/
+**/data/cvfh_features/
+**/data/esf_features/
+**/data/fingerprints/
+**/data/logs/
 *.esf
+*.cvfh
 *.pcd
 *.bin
