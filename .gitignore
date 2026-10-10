@@ -40,3 +40,8 @@ data/11/**
 *.esf
 *.cvfh
 *.bin
+
+# .git 备份目录（filter-branch 产生的临时备份，不上传）
+/.git.backup_*/
+/.git.bak/
+/.git.filtersys/
