@@ -33,6 +33,9 @@
     <ClInclude Include="02_feature_extraction\src\utils\types.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="04_category_recognition\include\cvfh_recognizer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="01_sim_data_gen\src\point_cloud\stl_reader.cpp">
@@ -45,6 +48,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="01_sim_data_gen\tools\test_extrinsic_transform.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="04_category_recognition\src\cvfh_recognizer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

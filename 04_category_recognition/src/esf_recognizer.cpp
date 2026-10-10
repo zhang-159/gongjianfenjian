@@ -155,9 +155,10 @@ float ESFRecognizer::computeConfidence(float dist1, float dist2) const {
 }
 
 RecognitionResult ESFRecognizer::recognize(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
-    
-    auto topk_results = recognizeTopK(cloud, 5);
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+    float distance_threshold) {
+
+    auto topk_results = recognizeTopK(cloud, 5, distance_threshold);
     if (topk_results.empty()) {
         return RecognitionResult{};
     }
@@ -165,12 +166,32 @@ RecognitionResult ESFRecognizer::recognize(
 }
 
 std::vector<RecognitionResult> ESFRecognizer::recognizeTopK(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k) {
-    
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+    int k,
+    float distance_threshold) {
+
+    RecognizeOptions opts;
+    opts.top_k = k;
+    opts.distance_threshold = distance_threshold;
+    return recognizeTopK(cloud, opts);
+}
+
+std::vector<RecognitionResult> ESFRecognizer::recognizeTopK(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+    const RecognizeOptions& opts) {
+
     std::vector<RecognitionResult> results;
+    const int k = opts.top_k;
+    const float threshold = opts.distance_threshold;
+    const bool enable_filter = (threshold > 0.0f);
 
     if (!is_index_loaded_) {
         std::cerr << "[ESFRecognizer] 索引未加载" << std::endl;
+        return results;
+    }
+
+    if (k <= 0) {
+        std::cerr << "[ESFRecognizer] k 必须为正数, 实际=" << k << std::endl;
         return results;
     }
 
@@ -187,16 +208,55 @@ std::vector<RecognitionResult> ESFRecognizer::recognizeTopK(
 
     faiss_impl_->index->search(1, feature.data(), k, distances.data(), indices.data());
 
-    // 构建结果
+    // 记录原始检索数量（用于过滤统计）
+    int raw_count = 0;
     for (int i = 0; i < k; ++i) {
-        if (indices[i] < 0) continue; // 无效索引
+        if (indices[i] >= 0) ++raw_count;
+    }
+
+    // 第一次过滤：去掉无效索引
+    struct Candidate {
+        int64_t vec_id;
+        float distance;
+    };
+    std::vector<Candidate> candidates;
+    candidates.reserve(k);
+    for (int i = 0; i < k; ++i) {
+        if (indices[i] < 0) continue;
+        candidates.push_back({indices[i], distances[i]});
+    }
+
+    // 第二次过滤：距离阈值
+    int filtered_count = static_cast<int>(candidates.size());
+    if (enable_filter) {
+        std::vector<Candidate> kept;
+        kept.reserve(candidates.size());
+        for (const auto& c : candidates) {
+            if (c.distance <= threshold) {
+                kept.push_back(c);
+            }
+        }
+        candidates.swap(kept);
+        filtered_count = static_cast<int>(candidates.size());
+
+        if (opts.verbose) {
+            std::cout << "[ESFRecognizer] 阈值过滤: raw=" << raw_count
+                      << ", dist<= " << threshold
+                      << ", kept=" << filtered_count << std::endl;
+        }
+    }
+
+    // 构建结果
+    results.reserve(candidates.size());
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        const auto& c = candidates[i];
 
         RecognitionResult result;
-        result.topk_ids.push_back(static_cast<int>(indices[i]));
-        result.topk_scores.push_back(distances[i]);
+        result.topk_ids.push_back(static_cast<int>(c.vec_id));
+        result.topk_scores.push_back(c.distance);
 
         // ID映射
-        size_t vec_id = static_cast<size_t>(indices[i]);
+        size_t vec_id = static_cast<size_t>(c.vec_id);
         if (vec_id < id_mapping_.size()) {
             result.category_id = id_mapping_[vec_id].category_id;
             result.pose_id = id_mapping_[vec_id].pose_id;
@@ -205,16 +265,21 @@ std::vector<RecognitionResult> ESFRecognizer::recognizeTopK(
             result.pose_id = "unknown";
         }
 
-        // 计算置信度 (Top-1/Top-2)
-        if (i == 0 && k > 1) {
-            result.confidence = computeConfidence(distances[0], distances[1]);
+        // 计算置信度（基于过滤后 Top-1/Top-2 的距离比值）
+        if (i == 0 && candidates.size() > 1) {
+            result.confidence = computeConfidence(candidates[0].distance,
+                                                  candidates[1].distance);
         } else if (i > 0) {
-            result.confidence = computeConfidence(distances[i], distances[0]);
+            result.confidence = computeConfidence(candidates[i].distance,
+                                                  candidates[0].distance);
         } else {
-            result.confidence = 1.0f / (1.0f + distances[0]);
+            result.confidence = 1.0f / (1.0f + candidates[0].distance);
         }
 
         result.feature_type = "ESF";
+        result.raw_topk_count = raw_count;
+        result.filtered_topk_count = filtered_count;
+        result.applied_threshold = enable_filter ? threshold : -1.0f;
         results.push_back(result);
     }
 

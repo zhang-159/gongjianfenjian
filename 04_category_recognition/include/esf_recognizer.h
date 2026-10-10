@@ -46,18 +46,32 @@ public:
     /**
      * @brief 执行识别
      * @param cloud 输入点云
+     * @param distance_threshold 距离阈值（<=0 表示不启用过滤）
      * @return 识别结果
      */
-    RecognitionResult recognize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
+    RecognitionResult recognize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+                                float distance_threshold = -1.0f);
 
     /**
      * @brief 获取Top-K检索结果
      * @param cloud 输入点云
      * @param k 返回数量
-     * @return Top-K结果
+     * @param distance_threshold 距离阈值（<=0 表示不启用过滤）
+     * @return Top-K结果（已应用阈值过滤）
      */
     std::vector<RecognitionResult> recognizeTopK(
-        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k = 5);
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+        int k = 5,
+        float distance_threshold = -1.0f);
+
+    /**
+     * @brief 使用结构化参数执行 Top-K 检索
+     * @param cloud 输入点云
+     * @param opts 检索选项
+     */
+    std::vector<RecognitionResult> recognizeTopK(
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+        const RecognizeOptions& opts);
 
     /**
      * @brief 检查索引是否已加载

@@ -146,6 +146,7 @@
     <ClInclude Include="02_feature_extraction\src\utils\types.h" />
     <ClInclude Include="04_category_recognition\include\category_recognition.h" />
     <ClInclude Include="04_category_recognition\include\esf_recognizer.h" />
+    <ClInclude Include="04_category_recognition\include\cvfh_recognizer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="01_sim_data_gen\src\point_cloud\extrinsic_transform.cpp" />
@@ -156,6 +157,7 @@
     <ClCompile Include="03_database_build\src\faiss_index.cpp" />
     <ClCompile Include="04_category_recognition\src\main.cpp" />
     <ClCompile Include="04_category_recognition\src\esf_recognizer.cpp" />
+    <ClCompile Include="04_category_recognition\src\cvfh_recognizer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

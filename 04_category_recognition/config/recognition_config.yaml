@@ -1,5 +1,5 @@
 # 04类别判定模块配置文件
-# 版本：v1.0
+# 版本：v2.0 - 增加 CVFH 识别器 + 距离阈值过滤
 
 recognition:
   # 置信度阈值
@@ -9,6 +9,12 @@ recognition:
   # 检索参数
   top_k: 5
 
+  # 距离阈值（≤0 表示关闭过滤）
+  # 与 QtWidgetsApplication2 中 distanceThreshold 等价
+  # 建议根据数据分布调整；过小会把所有候选都滤掉，过大会失去过滤意义
+  esf_distance_threshold: 0.45
+  cvfh_distance_threshold: 1.20
+
 # 特征库路径（相对于项目根目录）
 feature_library:
   # ESF特征库
@@ -16,7 +22,7 @@ feature_library:
     index_path: "../data/fingerprints/esf_index.bin"
     ids_path: "../data/fingerprints/esf_ids.txt"
 
-  # CVFH特征库（预留，后续扩展）
+  # CVFH / OUR-CVFH 特征库
   cvfh:
     index_path: "../data/fingerprints/cvfh_index.bin"
     ids_path: "../data/fingerprints/cvfh_ids.txt"
@@ -26,3 +32,17 @@ preprocessing:
   voxel_leaf_size: 0.005    # 体素降采样叶子大小（米）
   mean_k: 50                 # 统计离群点移除的邻居数
   std_dev_mul: 1.0          # 标准差倍数
+
+# CVFH 特征提取参数
+# 注：以下键名映射到 PCL 1.14.0 OURCVFH 实际 setter
+# 原 cluster_min_nodes / cluster_max_nodes / axis_variance_threshold / min_axis_angle / normalize_axes
+# 已分别改为 min_points / (删除) / min_axis_value / axis_ratio / normalize_bins
+cvfh_extraction:
+  normal_radius: 0.02          # 法线估计半径（米）
+  cluster_tolerance: 0.05      # 聚类容差（米）
+  min_points: 5                 # 聚类前最小点数（原 cluster_min_nodes）
+  # cluster_max_nodes 已删除（PCL 1.14 取消该旋钮）
+  min_axis_value: 0.05          # 消歧轴最小值（原 axis_variance_threshold）
+  axis_ratio: 0.96              # 主轴比阈值（原 min_axis_angle）
+  normalize_bins: true          # VFH bin 归一化（原 normalize_axes）
+  refine_clusters: 1.0          # 聚类精化系数
