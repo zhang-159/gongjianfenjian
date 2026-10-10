@@ -6,7 +6,6 @@ Release/
 *.suo
 *.user
 .vs/
-*.pcd
 *.exe
 *.dll
 *.lib
@@ -14,14 +13,30 @@ Release/
 *.idb
 *.log
 
-# 运行时数据（可重新生成）
-**/data/pointclouds/
-**/data/features/
-**/data/cvfh_features/
-**/data/esf_features/
-**/data/fingerprints/
-**/data/logs/
+# 运行时数据（可重新生成，不上传到仓库）
+# 根目录 data/ 下的运行时数据
+data/pointclouds/**
+data/features/**
+data/cvfh_features/**
+data/esf_features/**
+data/fingerprints/**
+data/logs/**
+data/11/**
+
+# 各项目子目录的运行时数据
+**/data/pointclouds/**
+**/data/features/**
+**/data/cvfh_features/**
+**/data/esf_features/**
+**/data/fingerprints/**
+**/data/logs/**
+
+# 但允许 .gitkeep 占位文件
+!data/**/.gitkeep
+!**/data/**/.gitkeep
+
+# 点云和特征文件
+*.pcd
 *.esf
 *.cvfh
-*.pcd
 *.bin
